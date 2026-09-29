@@ -23,13 +23,27 @@ app.post('/api/tts', async (req, res) => {
     const tts = new EdgeTTS(text, voice || 'en-US-AriaNeural');
     const result = await tts.synthesize();
     
-    // 告诉浏览器返回的是音频
+    // 1. 关键检查：如果音频数据为空，打印日志并报错，方便定位
+    if (!result.audio || result.audio.length === 0) {
+      console.error('>>> 严重警告：合成的音频长度为 0！可能是微软接口屏蔽了 Render 的服务器 IP。');
+      return res.status(500).json({ error: 'Empty audio generated' });
+    }
+
+    // 2. 关键：强制转换成 Buffer，并明确告诉浏览器数据长度
+    const audioBuffer = Buffer.from(result.audio);
     res.setHeader('Content-Type', 'audio/mpeg');
-    // 把音频数据发回去
-    res.send(result.audio);
+    res.setHeader('Content-Length', audioBuffer.length); // 帮前端正确解析 Blob 大小
+    
+    // 3. 发送音频数据
+    res.send(audioBuffer);
+
   } catch (error) {
     console.error('TTS synthesis failed:', error);
-    res.status(500).json({ error: 'Failed to synthesize speech' });
+    // 把详细的错误信息返回给前端，方便你在 F12 里看到原因
+    res.status(500).json({ 
+      error: 'Failed to synthesize speech', 
+      details: error.message 
+    });
   }
 });
 
